@@ -5,12 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kakao Map Search Study</title>
     <style>
+        /* 기본 스타일 초기화 */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body, html { width: 100%; height: 100%; font-family: 'Pretendard', sans-serif; }
 
         .container { display: flex; width: 100%; height: 100vh; }
 
-        /* 왼쪽 검색창 영역 */
+        /* 왼쪽 사이드바 영역 */
         #side_bar {
             width: 400px;
             height: 100%;
@@ -45,56 +46,60 @@
         <div class="search_area">
             <h2>📍 장소 검색</h2>
             <form onsubmit="searchPlaces(); return false;" class="input_group">
-                <input type="text" id="keyword" placeholder="키워드를 입력하세요 (예: 맛집)" value="강남역">
+                <input type="text" id="keyword" placeholder="키워드를 입력하세요 (예: 강남역 맛집)" value="강남역">
                 <button type="submit">검색</button>
             </form>
         </div>
         <ul id="results_list">
-            </ul>
+            <!-- 검색 결과가 여기에 동적으로 생성됩니다 -->
+        </ul>
     </aside>
 
     <main id="map"></main>
 </div>
 
-<script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=8e63724a5ae060891596d0d2cc915fc3&libraries=services"></script>
+<!-- 카카오 맵 API 스크립트: autoload=false를 사용하여 로딩 완료 후 지도를 초기화합니다 -->
+<script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=6ba0008cd004657912f249fb816e7756&libraries=services&autoload=false"></script>
 
 <script>
     let map;
     let placeService;
     let markers = [];
 
-    // 페이지 시작 시 실행
-    window.onload = function() {
+    // API 로드가 완료된 후 실행되도록 kakao.maps.load 사용
+    kakao.maps.load(function() {
         initMap();
-    };
+    });
 
     // 지도 초기화 함수
     function initMap() {
         const container = document.getElementById('map');
         const options = {
-            center: new kakao.maps.LatLng(37.566826, 126.9786567),
+            center: new kakao.maps.LatLng(37.566826, 126.9786567), // 기본 위치: 서울시청
             level: 5
         };
 
         map = new kakao.maps.Map(container, options);
-        placeService = new kakao.maps.services.Places(); // 서비스 객체 생성
+        placeService = new kakao.maps.services.Places(); // 장소 검색 서비스 객체 생성
 
-        // 현재 위치 요청
+        // 현재 위치 요청 (Geolocation)
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition((pos) => {
+            navigator.geolocation.getCurrentPosition(function(pos) {
                 const currentPos = new kakao.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
                 map.setCenter(currentPos);
                 
-                // 현재 위치 표시용 마커
+                // 내 위치 표시 마커
                 new kakao.maps.Marker({
                     map: map,
                     position: currentPos
                 });
+            }, function(err) {
+                console.warn("위치 정보를 가져올 수 없습니다.");
             });
         }
     }
 
-    // 검색 실행 함수
+    // 장소 검색 실행 함수
     function searchPlaces() {
         const keyword = document.getElementById('keyword').value;
 
@@ -103,8 +108,8 @@
             return;
         }
 
-        // 카카오 서버에 검색 요청
-        placeService.keywordSearch(keyword, (data, status) => {
+        // 카카오 서버에 키워드 검색 요청
+        placeService.keywordSearch(keyword, function(data, status) {
             if (status === kakao.maps.services.Status.OK) {
                 displayResults(data);
             } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
@@ -115,48 +120,48 @@
         });
     }
 
-    // 검색 결과 출력 함수
+    // 검색 결과를 지도와 리스트에 표시하는 함수
     function displayResults(places) {
         const listEl = document.getElementById('results_list');
-        const bounds = new kakao.maps.LatLngBounds();
+        const bounds = new kakao.maps.LatLngBounds(); // 검색된 장소들을 모두 포함할 범위 객체
         
-        // 1. 기존 데이터(마커, 리스트) 지우기
+        // 1. 기존 마커 및 리스트 초기화
         clearMap();
         listEl.innerHTML = '';
 
         places.forEach((place, index) => {
             const position = new kakao.maps.LatLng(place.y, place.x);
             
-            // 2. 마커 생성 및 지도 추가
+            // 2. 마커 생성 및 지도 표시
             const marker = new kakao.maps.Marker({
                 position: position,
                 map: map
             });
             markers.push(marker);
 
-            // 3. 리스트 아이템 생성
+            // 3. 사이드바 리스트 아이템 생성
             const li = document.createElement('li');
             li.innerHTML = `
-                <span class="place_name">${place.place_name}</span>
+                <span class="place_name">${index + 1}. ${place.place_name}</span>
                 <span class="address">${place.road_address_name || place.address_name}</span>
             `;
             
-            // 리스트 클릭 시 해당 위치로 이동
+            // 리스트 아이템 클릭 시 해당 위치로 부드럽게 이동
             li.onclick = () => {
-                map.panTo(position); // 부드럽게 이동
+                map.panTo(position);
             };
 
             listEl.appendChild(li);
 
-            // 4. 지도 범위 확장을 위해 좌표 추가
+            // 4. 지도 범위 조절을 위해 모든 좌표를 bounds에 추가
             bounds.extend(position);
         });
 
-        // 5. 검색 결과에 맞춰 지도 영역 조정
+        // 5. 검색된 모든 장소가 보이도록 지도 시점 조절
         map.setBounds(bounds);
     }
 
-    // 이전 검색 결과 삭제 함수
+    // 지도 위 마커 삭제 함수
     function clearMap() {
         markers.forEach(m => m.setMap(null));
         markers = [];
